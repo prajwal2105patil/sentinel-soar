@@ -1,0 +1,3 @@
+# Phase 1 — core loop. SQLite is stdlib; only YAML parsing needs a dep.
+PyYAML>=6.0
+# Later phases add: requests (enrich), fastapi + uvicorn (API), langgraph (agent).

@@ -1,0 +1,25 @@
+id: RULE-BRUTE-FORCE-001
+name: SSH Brute Force
+description: >
+  Multiple failed SSH authentication attempts from the same source IP within a
+  short time window. Indicates password guessing / credential stuffing. If a
+  successful login from the same IP follows the failures, treat as a likely
+  successful compromise.
+severity: high
+
+# MITRE ATT&CK mapping (consumed by attack_map.py in Phase 2; harmless metadata now).
+mitre:
+  - T1110        # Brute Force
+  - T1110.001    # Password Guessing
+
+# --- detection logic (interpreted generically by core/detect.py) ---
+match:
+  event_type: auth_failure   # only consider failed-auth events
+group_by: source_ip          # cluster events by this field
+threshold:
+  count: 5                   # >= this many matching events...
+  window_seconds: 120        # ...within this sliding window trips the rule
+
+# If an auth_success from the same source_ip occurs at/after the first failure,
+# escalate the verdict (possible successful brute force).
+escalate_on_success: true

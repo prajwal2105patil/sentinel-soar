@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/events.db
+.venv/
+venv/
+.env

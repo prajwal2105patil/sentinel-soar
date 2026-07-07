@@ -1,0 +1,8 @@
+source_ip,label,note
+203.0.113.44,malicious,SSH brute force - 8 failed logins in 30s across admin/root/oracle/test/git
+45.133.1.88,malicious,SSH brute force with successful login - credential compromise on postgres
+185.220.101.5,malicious,SSH brute force - 5 failed root logins in 24s (known Tor exit range)
+10.0.0.5,benign,Automated backup key auth from internal host
+198.51.100.7,benign,Legitimate user prajwal - single typo then success; later single stray failure
+198.51.100.23,benign,Deploy service publickey auth
+203.0.113.9,benign,Legitimate user alice - one failed then success
