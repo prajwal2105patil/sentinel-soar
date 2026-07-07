@@ -24,9 +24,10 @@ sample logs → INGEST(SQL) → DETECT(YAML rules) → ENRICH(API/mock)
 | `core/detect.py` | Interpret rules → flagged alerts | Detection + coverage | ✅ 1 |
 | `core/triage.py` | LLM-stub verdict grounded in cited evidence | AI-driven triage (composite AI, provider-agnostic) | ✅ 1 |
 | `core/audit.py` | Append-only audit log of every action | SOC 2 governance / audit trail | ✅ 1 |
-| `core/enrich.py` | IP reputation / geo (API + mock) | Context enrichment | ⏳ 2 |
-| `core/attack_map.py` | Map detections → MITRE ATT&CK IDs | Map to ATT&CK attack chains | ⏳ 2 |
-| `core/cage.py` | Validate + sandbox the analysis step | Guardrailed / safe automation | ⏳ 2 |
+| `detections/rules/impossible_travel.yml` | Geo/velocity detection-as-code | Detection engineering (2nd technique) | ✅ 2 |
+| `core/enrich.py` | IP reputation / geo (mock + live opt-in) | Context enrichment | ✅ 2 |
+| `core/attack_map.py` | Map detections → MITRE ATT&CK IDs | Map to ATT&CK attack chains | ✅ 2 |
+| `core/cage.py` | Validate + sandbox the analysis step | Guardrailed / safe automation | ✅ 2 |
 | `agent/investigator.py` | LangGraph agent wiring the full loop | Composite-AI agent loop | ⏳ 3 |
 | `playbooks/response/*.yml` | Deterministic response + analyst-in-loop approval | Response automation with control | ⏳ 3 |
 | `api/app.py` | FastAPI `/ingest` `/investigate` `/cases` | Programmatic SOC surface | ⏳ 3 |
@@ -50,16 +51,17 @@ Live Phase-1 metrics (run `python -m core.detect`). Full §5 scoreboard lands in
 |---|---|---|---|
 | Auto-Triage Rate | % alerts fully triaged by the agent (no human) | ≥ 80% | **100%** |
 | Audit Completeness | % actions written to `audit_log` | 100% | **100%** |
-| Mean Time To Triage | avg pipeline latency per alert | < 5 s | **~11 ms** |
-| Detection Precision / Recall / F1 | on `data/labels.csv` | ≥ 0.90 / 0.85 / 0.87 | ⏳ Phase 4 |
-| ATT&CK Coverage | distinct techniques mapped | ≥ 5 | ⏳ Phase 2 |
-| Cage Containment | unhandled errors escaping the cage | 0 | ⏳ Phase 2 |
+| Mean Time To Triage | avg pipeline latency per alert | < 5 s | **~21 ms** |
+| Detection Precision / Recall / F1 | on `data/labels.csv` | ≥ 0.90 / 0.85 / 0.87 | **1.00 / 1.00 / 1.00** |
+| ATT&CK Coverage | distinct techniques mapped | ≥ 5 | **5** (T1110, T1110.001, T1021.004, T1078, T1078.003) |
+| Enrichment Success | % alerts enriched with context | ≥ 95% | **100%** |
+| Cage Containment | unhandled errors escaping the cage | 0 | **0** (5 malformed inputs contained) |
 | Verdict Faithfulness | verdict grounded in cited evidence | ≥ 0.90 | ✅ 1.0 by construction |
 
 ## Build status
 
 - **Phase 1 — Core loop (MVP):** ✅ ingest, one rule, detect, LLM triage stub, audit log.
-- **Phase 2 — Investigation depth:** ⏳ second rule, enrichment, ATT&CK map, execution cage.
+- **Phase 2 — Investigation depth:** ✅ impossible-travel rule, geo/reputation enrichment, ATT&CK map, execution cage.
 - **Phase 3 — Agent + response:** ⏳ LangGraph agent, response playbooks, FastAPI.
 - **Phase 4 — Proof polish:** ⏳ full scoreboard on `labels.csv`, architecture write-up.
 

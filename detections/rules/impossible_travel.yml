@@ -1,0 +1,22 @@
+id: RULE-IMPOSSIBLE-TRAVEL-001
+name: Impossible Travel
+description: >
+  The same user authenticates successfully from two IPs whose geographic
+  distance could not be covered in the elapsed time (implied travel speed
+  exceeds a commercial-flight ceiling). Strong signal of account takeover /
+  shared or stolen credentials. Requires geo enrichment (core/enrich.py).
+severity: high
+kind: impossible_travel   # dispatch: geo/velocity evaluator
+
+# MITRE ATT&CK mapping.
+mitre:
+  - T1078        # Valid Accounts
+  - T1078.003    # Valid Accounts: Local Accounts
+  - T1021.004    # Remote Services: SSH
+
+# --- detection logic ---
+match:
+  event_type: auth_success   # only successful logins can "travel"
+group_by: username
+params:
+  max_kmh: 900               # implied speed above this = physically impossible

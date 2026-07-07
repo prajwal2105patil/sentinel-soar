@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     first_ts       TEXT,
     last_ts        TEXT,
     evidence       TEXT,                -- JSON: cited event ids + summary
+    enrichment     TEXT,                -- JSON: geo + reputation for source_ip
+    attack         TEXT,                -- JSON: resolved MITRE ATT&CK techniques
     verdict        TEXT,                -- malicious | suspicious | benign
     verdict_reason TEXT,
     auto_triaged   INTEGER DEFAULT 0,   -- 1 if the agent triaged with no human

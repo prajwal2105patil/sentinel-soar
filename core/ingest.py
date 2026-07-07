@@ -54,6 +54,10 @@ def _parse_line(line: str) -> dict | None:
 
 def ingest(log_path: Path = LOG_PATH) -> int:
     """Parse the log into the events table. Returns the number of events loaded."""
+    # Rebuild the store from scratch so each pipeline run is clean and the schema
+    # is current (events.db is disposable / git-ignored).
+    if db.DB_PATH.exists():
+        db.DB_PATH.unlink()
     conn = db.connect()
     audit.log_action(conn, actor="ingest", action="ingest_start",
                      target=str(log_path), detail={"source": log_path.name})

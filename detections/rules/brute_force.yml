@@ -6,11 +6,13 @@ description: >
   successful login from the same IP follows the failures, treat as a likely
   successful compromise.
 severity: high
+kind: threshold   # dispatch: count-in-window evaluator
 
-# MITRE ATT&CK mapping (consumed by attack_map.py in Phase 2; harmless metadata now).
+# MITRE ATT&CK mapping (resolved by core/attack_map.py against attack_techniques.json).
 mitre:
   - T1110        # Brute Force
   - T1110.001    # Password Guessing
+  - T1021.004    # Remote Services: SSH
 
 # --- detection logic (interpreted generically by core/detect.py) ---
 match:

@@ -1,3 +1,5 @@
+Jun 14 08:05:00 web01 sshd[1780]: Accepted password for jsmith from 198.51.100.7 port 49771 ssh2
+Jun 14 08:12:00 web01 sshd[1792]: Accepted password for jsmith from 91.203.5.10 port 33188 ssh2
 Jun 14 08:15:02 web01 sshd[1801]: Accepted password for backup from 10.0.0.5 port 40122 ssh2
 Jun 14 08:22:41 web01 sshd[1830]: Failed password for prajwal from 198.51.100.7 port 51987 ssh2
 Jun 14 08:22:49 web01 sshd[1830]: Accepted password for prajwal from 198.51.100.7 port 51987 ssh2
