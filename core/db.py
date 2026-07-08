@@ -6,8 +6,11 @@ three tables: `events` (parsed log lines), `alerts` (detections + verdicts), and
 """
 from __future__ import annotations
 
+import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 # Repo-root-relative paths so the tool runs identically from any working dir.
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +43,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     attack         TEXT,                -- JSON: resolved MITRE ATT&CK techniques
     verdict        TEXT,                -- malicious | suspicious | benign
     verdict_reason TEXT,
+    escalated      INTEGER DEFAULT 1,   -- 1 = sent to analyst; 0 = auto-suppressed
+    response       TEXT,                -- JSON: selected playbook + actions + approval
     auto_triaged   INTEGER DEFAULT 0,   -- 1 if the agent triaged with no human
     created_at     TEXT
 );
@@ -62,3 +67,22 @@ def connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     return conn
+
+
+def insert_alert(conn: sqlite3.Connection, raw: dict[str, Any], case: dict[str, Any]) -> int:
+    """Persist an investigated case to the alerts table. Shared by the batch
+    pipeline and the API so both write identical rows. Returns the new alert id."""
+    cur = conn.execute(
+        "INSERT INTO alerts (rule_id, title, severity, source_ip, username, event_count, "
+        "first_ts, last_ts, evidence, enrichment, attack, verdict, verdict_reason, "
+        "escalated, response, auto_triaged, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (raw.get("rule_id"), raw.get("title"), raw.get("severity"), raw.get("source_ip"),
+         raw.get("username"), raw.get("event_count"), raw.get("first_ts"), raw.get("last_ts"),
+         json.dumps(raw.get("evidence")), json.dumps(case["enrichment"]),
+         json.dumps(case["attack"]), case["verdict"], case["reason"],
+         int(case["escalated"]), json.dumps(case["response"]), 1,
+         datetime.now(timezone.utc).isoformat(timespec="seconds")),
+    )
+    conn.commit()
+    return int(cur.lastrowid)

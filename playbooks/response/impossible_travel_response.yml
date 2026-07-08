@@ -1,0 +1,18 @@
+id: PB-IMPOSSIBLE-TRAVEL-001
+rule_id: RULE-IMPOSSIBLE-TRAVEL-001
+name: Impossible Travel Response
+description: Session/account containment for suspected account takeover.
+
+actions:
+  - action: revoke_sessions
+    description: Revoke all active sessions for the affected user.
+    requires_approval: false
+  - action: disable_account
+    description: Disable the account pending out-of-band identity verification.
+    requires_approval: true
+  - action: notify_user
+    description: Send an out-of-band verification prompt to the user.
+    requires_approval: false
+
+approval_policy:
+  require_approval_if_severity: [critical]

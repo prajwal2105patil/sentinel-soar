@@ -1,0 +1,17 @@
+id: PB-BRUTE-FORCE-001
+rule_id: RULE-BRUTE-FORCE-001
+name: SSH Brute Force Response
+description: Deterministic containment for SSH brute-force detections.
+
+actions:
+  - action: block_source_ip
+    description: Add the source IP to the edge firewall denylist for 24h.
+    requires_approval: false          # network block is reversible + low-blast-radius
+  - action: disable_account
+    description: Disable the targeted account pending a credential reset.
+    requires_approval: true           # account actions are always analyst-in-the-loop
+
+# Any action on a CRITICAL alert (e.g. confirmed successful compromise) is escalated
+# to a human regardless of its per-action default.
+approval_policy:
+  require_approval_if_severity: [critical]

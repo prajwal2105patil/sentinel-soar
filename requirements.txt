@@ -1,3 +1,11 @@
-# Phase 1 — core loop. SQLite is stdlib; only YAML parsing needs a dep.
-PyYAML>=6.0
-# Later phases add: requests (enrich), fastapi + uvicorn (API), langgraph (agent).
+# Sentinel-SOAR dependencies. SQLite is stdlib.
+PyYAML>=6.0          # detection rules + response playbooks
+
+# Phase 3 — agent + API
+langgraph>=0.2       # investigator agent graph (falls back to linear if absent)
+fastapi>=0.110       # API surface
+uvicorn>=0.29        # ASGI server for the API
+httpx>=0.27          # used by fastapi.testclient for endpoint tests
+
+# Optional: live IP enrichment (SENTINEL_ENRICH_LIVE=1). Mock is used otherwise.
+# requests>=2.31

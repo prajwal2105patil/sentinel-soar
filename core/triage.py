@@ -41,6 +41,27 @@ def triage(alert: dict[str, Any], evidence: dict[str, Any],
     cited = evidence.get("event_ids", [])
     ctx = _rep_note(enrichment)
 
+    # --- Credential review (low-fidelity failed-then-success signal) ---
+    if evidence.get("review"):
+        user = evidence.get("username")
+        k = evidence.get("failure_count", 0)
+        known_bad = bool((enrichment or {}).get("reputation", {}).get("is_known_bad"))
+        if k >= 5 or known_bad:
+            verdict = SUSPICIOUS
+            reason = (
+                f"Failed-then-success login for '{user}' from {ip}: {k} prior failure(s) "
+                f"and/or flagged source reputation — escalating for analyst review. "
+                f"Evidence events: {cited}.{ctx}"
+            )
+        else:
+            verdict = BENIGN
+            reason = (
+                f"Auto-suppressed (low-fidelity): '{user}' from {ip} had {k} failed "
+                f"attempt(s) then success from a known-good residential source with no "
+                f"travel anomaly. Not escalated. Evidence events: {cited}.{ctx}"
+            )
+        return {"verdict": verdict, "reason": reason}
+
     # --- Impossible travel ---
     if "implied_kmh" in evidence:
         verdict = MALICIOUS
