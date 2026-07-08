@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 560" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect x="6" y="6" width="968" height="548" rx="18" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
+
+  <text x="34" y="46" font-size="23" font-weight="700" fill="#0f172a">Sentinel-SOAR — SOC investigation pipeline</text>
+  <text x="34" y="70" font-size="14" fill="#475569">raw alert &#8594; detect &#8594; triage &#8594; investigate &#8594; respond &#8594; audited</text>
+
+  <!-- ingest / detect row -->
+  <g font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">
+    <rect x="34" y="92" width="150" height="54" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="109" y="118">sample_auth.log</text>
+    <text x="109" y="135" font-size="11" font-weight="400" fill="#64748b">raw SSH auth events</text>
+
+    <rect x="234" y="92" width="150" height="54" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="309" y="118">INGEST (SQL)</text>
+    <text x="309" y="135" font-size="11" font-weight="400" fill="#64748b">core/ingest.py</text>
+
+    <rect x="434" y="92" width="180" height="54" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="524" y="118">DETECT (YAML rules)</text>
+    <text x="524" y="135" font-size="11" font-weight="400" fill="#64748b">core/detect.py + rules/*.yml</text>
+  </g>
+  <line x1="184" y1="119" x2="230" y2="119" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+  <line x1="384" y1="119" x2="430" y2="119" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+  <line x1="524" y1="146" x2="524" y2="186" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- agent container -->
+  <rect x="34" y="190" width="912" height="150" rx="14" fill="#ffffff" stroke="#0ea5e9" stroke-width="2" stroke-dasharray="6 5"/>
+  <text x="50" y="214" font-size="14" font-weight="700" fill="#0369a1">AGENT LOOP — agent/investigator.py · LangGraph state machine (linear fallback if absent)</text>
+
+  <g font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">
+    <rect x="54" y="238" width="190" height="72" rx="10" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.5"/>
+    <text x="149" y="270">ENRICH</text>
+    <text x="149" y="289" font-size="11" font-weight="400" fill="#64748b">geo + IP reputation</text>
+    <text x="149" y="303" font-size="11" font-weight="400" fill="#64748b">core/enrich.py</text>
+
+    <rect x="274" y="238" width="190" height="72" rx="10" fill="#ecfeff" stroke="#06b6d4" stroke-width="1.5"/>
+    <text x="369" y="270">ATT&amp;CK MAP</text>
+    <text x="369" y="289" font-size="11" font-weight="400" fill="#64748b">MITRE techniques</text>
+    <text x="369" y="303" font-size="11" font-weight="400" fill="#64748b">core/attack_map.py</text>
+
+    <rect x="494" y="238" width="190" height="72" rx="10" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="589" y="270">EXECUTION CAGE</text>
+    <text x="589" y="289" font-size="11" font-weight="400" fill="#64748b">validate + sandbox</text>
+    <text x="589" y="303" font-size="11" font-weight="400" fill="#64748b">core/cage.py</text>
+
+    <rect x="714" y="238" width="190" height="72" rx="10" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="809" y="270">LLM VERDICT</text>
+    <text x="809" y="289" font-size="11" font-weight="400" fill="#64748b">evidence-grounded</text>
+    <text x="809" y="303" font-size="11" font-weight="400" fill="#64748b">core/triage.py (stub)</text>
+  </g>
+  <line x1="244" y1="274" x2="270" y2="274" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+  <line x1="464" y1="274" x2="490" y2="274" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+  <line x1="684" y1="274" x2="710" y2="274" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+
+  <line x1="149" y1="340" x2="149" y2="378" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- route decision -->
+  <polygon points="149,372 205,410 149,448 93,410" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="149" y="415" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">ROUTE</text>
+
+  <!-- respond / suppress -->
+  <g font-size="14" font-weight="600" fill="#0f172a">
+    <rect x="250" y="382" width="330" height="56" rx="10" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+    <text x="266" y="408">RESPOND — deterministic playbook</text>
+    <text x="266" y="426" font-size="11" font-weight="400" fill="#64748b">core/respond.py · analyst-in-loop approval on critical/account actions</text>
+
+    <rect x="60" y="474" width="330" height="52" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="76" y="499">SUPPRESS — benign, auto-closed</text>
+    <text x="76" y="516" font-size="11" font-weight="400" fill="#64748b">fewer escalations (false-positive reduction)</text>
+
+    <rect x="620" y="382" width="326" height="56" rx="10" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5"/>
+    <text x="636" y="408">AUDIT LOG + EVAL GATE</text>
+    <text x="636" y="426" font-size="11" font-weight="400" fill="#64748b">core/audit.py · eval/detection_quality.py</text>
+  </g>
+  <text x="228" y="400" font-size="11" fill="#ef4444" text-anchor="middle">escalate</text>
+  <text x="150" y="466" font-size="11" fill="#64748b" text-anchor="middle">benign</text>
+  <line x1="205" y1="410" x2="246" y2="410" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+  <line x1="149" y1="448" x2="149" y2="470" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+  <line x1="580" y1="410" x2="616" y2="410" stroke="#64748b" stroke-width="2" marker-end="url(#arw)"/>
+
+  <!-- api note -->
+  <text x="946" y="214" font-size="11" fill="#64748b" text-anchor="end">exposed via FastAPI: /ingest · /investigate · /cases (X-API-key)</text>
+
+  <!-- metrics strip -->
+  <line x1="34" y1="540" x2="946" y2="540" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="34" y="556" font-size="11" fill="#475569">Scoreboard (synthetic labeled set): Precision/Recall/F1 1.00 · ATT&amp;CK coverage 5 · FP-reduction 100% · Cage 0 escapes · Audit 100% · Faithfulness 100%</text>
+</svg>

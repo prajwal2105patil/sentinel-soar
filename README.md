@@ -1,5 +1,10 @@
 # Sentinel-SOAR
 
+[![CI](https://github.com/prajwal2105patil/sentinel-soar/actions/workflows/ci.yml/badge.svg)](https://github.com/prajwal2105patil/sentinel-soar/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Scoreboard](https://img.shields.io/badge/detection--quality-all%20targets%20met-brightgreen)
+
 **An AiStrike-mirroring mini SOAR** — a runnable, offline, zero-paid-key pipeline that reproduces the SOC loop **detect → triage → investigate → respond**, with a scoreboard that speaks AiStrike's metrics.
 
 > Patterns adapted from my **DREADNOUGHT** data platform (SQL warehouse, YAML config, append-only audit log, execution cage). Sentinel-SOAR built by **Prajwal Patil**.
@@ -7,12 +12,14 @@
 
 ---
 
-## Raw alert → investigated, responded, audited
+## Architecture
+
+![Sentinel-SOAR architecture](docs/architecture.svg)
 
 ```
-sample logs → INGEST(SQL) → DETECT(YAML rules) → ENRICH(API/mock)
+sample logs → INGEST(SQL) → DETECT(YAML rules) → ENRICH(geo/reputation)
    → MAP(MITRE ATT&CK) → EXECUTION CAGE(safe analysis) → LLM AGENT verdict
-   → YAML RESPONSE PLAYBOOK(auto | analyst-in-loop) → AUDIT LOG + EVAL
+   → ROUTE → RESPONSE PLAYBOOK(auto | analyst-in-loop) | SUPPRESS(benign) → AUDIT LOG + EVAL
 ```
 
 ## Module → AiStrike capability
@@ -75,6 +82,16 @@ Live metrics (run `python -m core.detect`) on the synthetic labeled set. All cur
 | Audit Completeness | % actions written to `audit_log` | 100% | **100%** |
 | Mean Time To Triage | avg pipeline latency per alert | < 5 s | **~19 ms** |
 | Verdict Faithfulness | verdict grounded in cited evidence | ≥ 0.90 | **1.0** by construction (every claim cites events) |
+
+## Tests & CI
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q                  # 30 tests: pipeline, cage, enrich, respond, triage, API
+python -m eval.detection_quality     # the scoreboard gate (exit 0 = all targets met)
+```
+
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push/PR to `main` across **Python 3.11 and 3.12**: it installs deps, runs the full `pytest` suite, then runs the detection-quality gate — so a regression that drops any §5 metric below target **fails the build**.
 
 ## Build status
 
