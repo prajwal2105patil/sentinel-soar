@@ -33,7 +33,7 @@ sample logs → INGEST(SQL) → DETECT(YAML rules) → ENRICH(API/mock)
 | `core/respond.py` + `playbooks/response/*.yml` | Deterministic response + analyst-in-loop approval | Response automation with control | ✅ 3 |
 | `core/auth.py` | X-API-key gate (DREADNOUGHT pattern) | Access control | ✅ 3 |
 | `api/app.py` | FastAPI `/ingest` `/investigate` `/cases` | Programmatic SOC surface | ✅ 3 |
-| `eval/detection_quality.py` | Compute the full scoreboard on labels | True-positive / fewer-escalations — quantified | ⏳ 4 |
+| `eval/detection_quality.py` | Full §5 scoreboard as a pass/fail gate | True-positive / fewer-escalations — quantified | ✅ 4 |
 
 ## Run
 
@@ -42,6 +42,7 @@ pip install -r requirements.txt
 python -m core.ingest              # logs -> data/events.db
 python -m core.detect              # rules -> agent (enrich/map/cage/verdict/response) -> scoreboard
 uvicorn api.app:app --reload       # API: /ingest /investigate /cases  (X-API-Key required)
+python -m eval.detection_quality   # full §5 scoreboard gate (exits non-zero if any target missed)
 ```
 
 Investigate a single alert over the API (key defaults to `dev-sentinel-key`, override with `SENTINEL_API_KEY`):
@@ -80,7 +81,7 @@ Live metrics (run `python -m core.detect`) on the synthetic labeled set. All cur
 - **Phase 1 — Core loop (MVP):** ✅ ingest, one rule, detect, LLM triage stub, audit log.
 - **Phase 2 — Investigation depth:** ✅ impossible-travel rule, geo/reputation enrichment, ATT&CK map, execution cage.
 - **Phase 3 — Agent + response:** ✅ LangGraph investigator, response playbooks + analyst-in-loop approval, FastAPI `/ingest` `/investigate` `/cases` with X-API-key.
-- **Phase 4 — Proof polish:** ⏳ `eval/detection_quality.py` full scoreboard on `labels.csv`, architecture write-up.
+- **Phase 4 — Proof polish:** ✅ `eval/detection_quality.py` full §5 scoreboard gate (all targets PASS, exit 0); README architecture diagram + module→capability table + scoreboard. *(Remaining: record the 90-sec walkthrough — a manual step.)*
 
 ## Honesty & attribution
 

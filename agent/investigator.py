@@ -25,9 +25,20 @@ ESCALATE_VERDICTS = {"malicious", "suspicious"}
 
 try:
     import warnings
-    # Targeted: silence a LangChain pending-deprecation notice from langgraph's
-    # internals (not our code) so CLI/API output stays clean.
-    warnings.filterwarnings("ignore", message="The default value of `allowed_objects`")
+
+    # LangChain re-installs its own warnings filters during import, so a normal
+    # filterwarnings("ignore", ...) gets overridden and a cosmetic pending-
+    # deprecation notice (from langgraph internals, not our code) leaks to stderr.
+    # Intercept at the display layer instead — langchain doesn't touch showwarning.
+    _orig_showwarning = warnings.showwarning
+
+    def _quiet_showwarning(message, category, filename, lineno, file=None, line=None):
+        if "allowed_objects" in str(message):
+            return  # drop this one library notice; pass everything else through
+        return _orig_showwarning(message, category, filename, lineno, file, line)
+
+    warnings.showwarning = _quiet_showwarning
+
     from langgraph.graph import END, START, StateGraph
     HAS_LANGGRAPH = True
 except Exception:  # pragma: no cover - offline / missing dep fallback

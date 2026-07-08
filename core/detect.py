@@ -11,10 +11,9 @@ Auto-Triage, Audit Completeness, MTTT.
 from __future__ import annotations
 
 import csv
-import json
 import math
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 
 import yaml
 
@@ -177,7 +176,7 @@ _DISPATCH = {
 
 
 # ------------------------------------------------------------------ driver
-def detect() -> list[dict]:
+def detect(verbose: bool = True) -> dict:
     conn = db.connect()
     conn.execute("DELETE FROM alerts")
     conn.commit()
@@ -213,76 +212,104 @@ def detect() -> list[dict]:
     audit.log_action(conn, actor="detect", action="detect_complete",
                      detail={"candidates": len(cases),
                              "escalated": sum(c["escalated"] for c in cases)})
-    _report(conn, cases, latencies, auto, cage)
+    metrics = compute_metrics(conn, cases, latencies, auto, cage)
+    if verbose:
+        _print_report(metrics)
     conn.close()
-    return cases
+    return metrics
 
 
-# ------------------------------------------------------------------ scoreboard
+# ------------------------------------------------------------------ metrics (single source of truth)
 def _load_labels() -> dict[str, str]:
     with LABELS_PATH.open(encoding="utf-8") as f:
         return {row["source_ip"]: row["label"] for row in csv.DictReader(f)}
 
 
-def _report(conn, cases, latencies, auto, cage):
+def _faithfulness(conn, cases: list[dict]) -> float:
+    """Fraction of verdicts whose cited evidence event ids are all real events."""
+    real_ids = {r[0] for r in conn.execute("SELECT id FROM events").fetchall()}
+    if not cases:
+        return 100.0
+    ok = 0
+    for c in cases:
+        ids = (c.get("evidence") or {}).get("event_ids", [])
+        if ids and all(i in real_ids for i in ids):
+            ok += 1
+    return ok / len(cases) * 100.0
+
+
+def compute_metrics(conn, cases: list[dict], latencies: list[float], auto: int,
+                    cage) -> dict:
+    """Compute the full §5 scoreboard from a pipeline run. Used by both the CLI
+    report and eval/detection_quality.py so the numbers can never disagree."""
     from core.attack_map import AttackMap
 
-    escalated = [c for c in cases if c["escalated"]]
-    suppressed = [c for c in cases if not c["escalated"]]
     labels = _load_labels()
     malicious = {ip for ip, lab in labels.items() if lab == "malicious"}
+    escalated = [c for c in cases if c["escalated"]]
+    suppressed = [c for c in cases if not c["escalated"]]
+    total = len(cases) or 1
 
-    print(f"\n[detect] {len(cases)} candidate(s): {len(escalated)} escalated, "
-          f"{len(suppressed)} auto-suppressed\n")
-    for c in escalated:
-        tech = ", ".join(t["id"] for t in c["attack"])
-        approval = [a["action"] for a in c["response"]["actions"] if a["requires_approval"]]
-        print(f"  #{c['id']} [{c['severity'].upper()}] {c['title']} - {c['source_ip']}")
-        print(f"      verdict: {c['verdict'].upper()}   ATT&CK: {tech}")
-        print(f"      response: {c['response']['playbook_id']}  "
-              f"needs-approval: {approval or 'none'}")
-        print(f"      {c['reason']}\n")
-    for c in suppressed:
-        print(f"  #{c['id']} [suppressed] {c['title']} - {c['source_ip']} ({c['username']})")
-        print(f"      {c['reason']}\n")
-
-    # Detection quality on ESCALATED alerts (post-triage funnel).
     flagged = {c["source_ip"] for c in escalated}
-    tp, fp = len(flagged & malicious), len(flagged - malicious)
-    fn = len(malicious - flagged)
+    tp, fp, fn = len(flagged & malicious), len(flagged - malicious), len(malicious - flagged)
     precision = tp / (tp + fp) if (tp + fp) else 1.0
     recall = tp / (tp + fn) if (tp + fn) else 1.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
 
-    # False-Positive Reduction: benign candidates auto-suppressed before escalation.
     benign_cands = [c for c in cases if labels.get(c["source_ip"]) == "benign"]
     benign_suppressed = [c for c in benign_cands if not c["escalated"]]
     fpr = (len(benign_suppressed) / len(benign_cands) * 100) if benign_cands else 100.0
 
-    # Analyst-approval rate over escalated response actions.
     all_actions = [a for c in escalated for a in c["response"]["actions"]]
     need_appr = [a for a in all_actions if a["requires_approval"]]
     appr_rate = (len(need_appr) / len(all_actions) * 100) if all_actions else 0.0
 
-    coverage = AttackMap.coverage(escalated)
-    enriched = sum(1 for c in cases if c["enrichment"]["enriched"])
-    total = len(cases) or 1
-    mttt = (sum(latencies) / len(latencies) * 1000) if latencies else 0.0
+    return {
+        "cases": cases, "escalated": escalated, "suppressed": suppressed,
+        "precision": precision, "recall": recall, "f1": f1, "tp": tp, "fp": fp, "fn": fn,
+        "coverage": AttackMap.coverage(escalated),
+        "enrichment_rate": sum(1 for c in cases if c["enrichment"]["enriched"]) / total * 100,
+        "fpr": fpr, "benign_suppressed": len(benign_suppressed), "benign_total": len(benign_cands),
+        "approval_rate": appr_rate, "actions_gated": len(need_appr), "actions_total": len(all_actions),
+        "cage_escapes": cage.escapes, "cage_contained": cage.contained,
+        "auto_rate": auto / total * 100,
+        "audit_count": audit.count_actions(conn), "audit_completeness": 100.0,
+        "mttt_ms": (sum(latencies) / len(latencies) * 1000) if latencies else 0.0,
+        "faithfulness": _faithfulness(conn, cases),
+    }
 
-    print("  -- Phase-3 scoreboard " + "-" * 44)
-    print(f"  Detection Precision   {precision:5.2f}   (target >= 0.90)  [TP={tp} FP={fp} FN={fn}]")
-    print(f"  Detection Recall      {recall:5.2f}   (target >= 0.85)")
-    print(f"  Detection F1          {f1:5.2f}   (target >= 0.87)")
-    print(f"  ATT&CK Coverage       {len(coverage):>4}    (target >= 5)     {coverage}")
-    print(f"  Enrichment Success   {enriched / total * 100:5.1f}%   (target >= 95%)")
-    print(f"  False-Pos Reduction  {fpr:5.1f}%   (target >= 70%)  "
-          f"[{len(benign_suppressed)}/{len(benign_cands)} benign suppressed]")
-    print(f"  Analyst-Approval Rate {appr_rate:4.1f}%   ({len(need_appr)}/{len(all_actions)} "
-          f"escalated actions gated)")
-    print(f"  Cage Containment      {cage.escapes:>4}    (target 0 escapes; {cage.contained} contained)")
-    print(f"  Auto-Triage Rate     {auto / total * 100:5.1f}%   (target >= 80%)")
-    print(f"  Audit Completeness   100.0%   ({audit.count_actions(conn)} actions, all logged)")
-    print(f"  Mean Time To Triage  {mttt:6.2f} ms  (target < 5000 ms)")
+
+def _print_report(m: dict) -> None:
+    print(f"\n[detect] {len(m['cases'])} candidate(s): {len(m['escalated'])} escalated, "
+          f"{len(m['suppressed'])} auto-suppressed\n")
+    for c in m["escalated"]:
+        tech = ", ".join(t["id"] for t in c["attack"])
+        approval = [a["action"] for a in c["response"]["actions"] if a["requires_approval"]]
+        print(f"  #{c['id']} [{c['severity'].upper()}] {c['title']} - {c['source_ip']}")
+        print(f"      verdict: {c['verdict'].upper()}   ATT&CK: {tech}")
+        print(f"      response: {c['response']['playbook_id']}  needs-approval: {approval or 'none'}")
+        print(f"      {c['reason']}\n")
+    for c in m["suppressed"]:
+        print(f"  #{c['id']} [suppressed] {c['title']} - {c['source_ip']} ({c['username']})")
+        print(f"      {c['reason']}\n")
+
+    print("  -- scoreboard " + "-" * 52)
+    print(f"  Detection Precision   {m['precision']:5.2f}   (target >= 0.90)  "
+          f"[TP={m['tp']} FP={m['fp']} FN={m['fn']}]")
+    print(f"  Detection Recall      {m['recall']:5.2f}   (target >= 0.85)")
+    print(f"  Detection F1          {m['f1']:5.2f}   (target >= 0.87)")
+    print(f"  ATT&CK Coverage       {len(m['coverage']):>4}    (target >= 5)     {m['coverage']}")
+    print(f"  Enrichment Success   {m['enrichment_rate']:5.1f}%   (target >= 95%)")
+    print(f"  False-Pos Reduction  {m['fpr']:5.1f}%   (target >= 70%)  "
+          f"[{m['benign_suppressed']}/{m['benign_total']} benign suppressed]")
+    print(f"  Analyst-Approval Rate {m['approval_rate']:4.1f}%   "
+          f"({m['actions_gated']}/{m['actions_total']} escalated actions gated)")
+    print(f"  Cage Containment      {m['cage_escapes']:>4}    "
+          f"(target 0 escapes; {m['cage_contained']} contained)")
+    print(f"  Auto-Triage Rate     {m['auto_rate']:5.1f}%   (target >= 80%)")
+    print(f"  Verdict Faithfulness {m['faithfulness']:5.1f}%   (target >= 90%)")
+    print(f"  Audit Completeness   {m['audit_completeness']:5.1f}%   ({m['audit_count']} actions logged)")
+    print(f"  Mean Time To Triage  {m['mttt_ms']:6.2f} ms  (target < 5000 ms)")
     print("  " + "-" * 66)
 
 
