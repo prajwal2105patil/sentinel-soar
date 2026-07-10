@@ -5,10 +5,11 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Scoreboard](https://img.shields.io/badge/detection--quality-all%20targets%20met-brightgreen)
 
-**An AiStrike-mirroring mini SOAR** — a runnable, offline, zero-paid-key pipeline that reproduces the SOC loop **detect → triage → investigate → respond**, with a scoreboard that speaks AiStrike's metrics.
+**Sentinel-SOAR turns raw SSH + cloud logs into investigated, MITRE-tagged, auto-responded security cases** — the **detect → triage → investigate → respond** loop of an AI-native SOC, running fully offline with zero paid keys.
 
+> ⚠️ **All metrics are on a SYNTHETIC labeled set** (`data/labels.csv`) — engineering proof, **not** a real-world benchmark. This is stated loudly on purpose. The ML risk scorer is a *real* scikit-learn model evaluated on a held-out split; the LLM triage seam is provider-agnostic and stub-able (offline by default). Run it on **real** public logs any time: [`docs/REAL_DATA.md`](docs/REAL_DATA.md).
+>
 > Patterns adapted from my **DREADNOUGHT** data platform (SQL warehouse, YAML config, append-only audit log, execution cage). Sentinel-SOAR built by **Prajwal Patil**.
-> Metrics below are computed on a **synthetic labeled alert set** (`data/labels.csv`) — they are engineering proof, **not** real-world SOC benchmarks.
 
 ---
 
@@ -17,10 +18,29 @@
 ![Sentinel-SOAR architecture](docs/architecture.svg)
 
 ```
-sample logs → INGEST(SQL) → DETECT(YAML rules) → ENRICH(geo/reputation)
-   → MAP(MITRE ATT&CK) → EXECUTION CAGE(safe analysis) → LLM AGENT verdict
+sample logs → INGEST(SQL) → DETECT(YAML rules) → ENRICH(geo/reputation) → CORRELATE(graph)
+   → MAP(MITRE ATT&CK) → ML RISK SCORE → EXECUTION CAGE → AGENT verdict
    → ROUTE → RESPONSE PLAYBOOK(auto | analyst-in-loop) | SUPPRESS(benign) → AUDIT LOG + EVAL
 ```
+
+## Why this — for AiStrike
+
+AiStrike builds an **AI-native SOC** (agents that detect → triage → investigate → respond); its founders scaled Securonix to a $1B+ outcome. Sentinel-SOAR reproduces that exact loop in miniature, with the signals a SIEM/SOAR team recognizes: **detection-as-code**, an **execution cage**, an **append-only audit trail**, **MITRE ATT&CK**, a **measured detection-quality gate in CI** — and, where it genuinely helps, a **real ML model that catches a low-and-slow attack the signature rules miss**. It's honest about what's synthetic, which is itself the point for a "secure by design / governance" team.
+
+## How it maps to the Security Engineer Intern JD
+
+| JD requirement | Where it's demonstrated in this repo |
+|---|---|
+| **Strong Python scripting** | Whole codebase (`core/ agent/ ml/ cli/ interop/`) · 62 tests · GitHub Actions CI on 3.11 + 3.12 |
+| **SQL to extract & analyze security data** | `cli/hunt.py` + `docs/hunt_queries.sql` — `GROUP BY` / `HAVING` / `COUNT(DISTINCT)` / windowed aggregates over the SQLite event store |
+| **YAML configs for investigation workflows** | `detections/rules/*.yml` (detection-as-code) + `playbooks/response/*.yml` (response + analyst approval) |
+| **Automate detect / investigate / respond** | `core/detect.py` + `agent/investigator.py` (LangGraph) → verdict + ATT&CK + response playbook |
+| **AI-driven security / basic ML** | `ml/` — real scikit-learn scorer, held-out **0.85 / 0.90 / 0.90**, recovers a rule false-negative |
+| **Threat detection · SecOps · log analysis** | 4 rules (brute-force, impossible-travel, credential-review, cloud-root-login) · execution cage · audit log |
+| **Cloud security & investigation** | CloudTrail ingest + `cloud_root_login` rule (`T1078.004`, `T1098`) |
+| **Networking fundamentals** | source-IP / password-spray / geo-velocity analysis (DNS & firewall parsing on the roadmap) |
+| **Linux / Windows + best practices** | Real Linux `sshd`/syslog (loghub) · fail-closed prod auth · sandboxed analysis (Windows EVTX on the roadmap) |
+| **APIs & security tools (SIEM / CSPM / CNAPP)** | FastAPI API · **Sigma export + ECS normalization** → converts to Splunk SPL / Elastic EQL / Sentinel KQL |
 
 ## Module → AiStrike capability
 
