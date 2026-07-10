@@ -42,6 +42,7 @@ sample logs → INGEST(SQL) → DETECT(YAML rules) → ENRICH(geo/reputation)
 | `api/app.py` | FastAPI `/ingest` `/investigate` `/cases` | Programmatic SOC surface | ✅ 3 |
 | `eval/detection_quality.py` | Full scoreboard as a pass/fail gate | True-positive / fewer-escalations — quantified | ✅ 4 |
 | `ml/` (`features` · `dataset` · `model`) | Real offline scikit-learn risk scorer over behavioural features | Basic ML in security / AI-driven detection | ✅ 5 |
+| `cli/hunt.py` + `docs/hunt_queries.sql` | Parameterized SQL threat-hunting CLI over the event store | SQL to extract & analyze security data | ✅ 5 |
 
 ## Run
 
@@ -50,6 +51,7 @@ pip install -r requirements.txt
 python -m core.ingest              # logs -> data/events.db
 python -m core.detect              # rules -> agent (enrich/correlate/ML/cage/verdict/response) -> scoreboard
 python -m ml.train                 # train the ML risk scorer, print held-out metrics + coefficients
+python -m cli.hunt top-talkers     # SQL threat-hunt CLI (spray / brute / users / timeline / cases / audit)
 uvicorn api.app:app --reload       # API: /ingest /investigate /cases  (X-API-Key required)
 python -m eval.detection_quality   # full §5 scoreboard gate (exits non-zero if any target missed)
 ```
@@ -99,7 +101,7 @@ Live metrics (run `python -m eval.detection_quality`) on the synthetic labeled s
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q                  # 44 tests: pipeline, cage, enrich, respond, triage, API, ML
+python -m pytest -q                  # 50 tests: pipeline, cage, enrich, respond, triage, API, ML, SQL hunts
 python -m eval.detection_quality     # the scoreboard gate (exit 0 = all targets met)
 ```
 
