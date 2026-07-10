@@ -43,6 +43,7 @@ sample logs → INGEST(SQL) → DETECT(YAML rules) → ENRICH(geo/reputation)
 | `eval/detection_quality.py` | Full scoreboard as a pass/fail gate | True-positive / fewer-escalations — quantified | ✅ 4 |
 | `ml/` (`features` · `dataset` · `model`) | Real offline scikit-learn risk scorer over behavioural features | Basic ML in security / AI-driven detection | ✅ 5 |
 | `cli/hunt.py` + `docs/hunt_queries.sql` | Parameterized SQL threat-hunting CLI over the event store | SQL to extract & analyze security data | ✅ 5 |
+| `interop/` (`ecs` · `sigma`) + `cli/export.py` | Normalize events to ECS; export rules as Sigma | Ports into SIEM (Splunk/Elastic/Sentinel) | ✅ 5 |
 
 ## Run
 
@@ -54,6 +55,8 @@ python -m ml.train                 # train the ML risk scorer, print held-out me
 python -m cli.hunt top-talkers     # SQL threat-hunt CLI (spray / brute / users / timeline / cases / audit)
 python scripts/fetch_public_sample.py && python -m core.ingest --log data/public/OpenSSH_2k.log --no-cloud
                                    # run on REAL public logs (loghub OpenSSH) — see docs/REAL_DATA.md
+python -m cli.export sigma         # emit detections as Sigma rules (convertible to SPL/EQL/KQL)
+python -m cli.export ecs --limit 20  # emit events normalized to Elastic Common Schema (ECS)
 uvicorn api.app:app --reload       # API: /ingest /investigate /cases  (X-API-Key required)
 python -m eval.detection_quality   # full §5 scoreboard gate (exits non-zero if any target missed)
 ```
@@ -103,7 +106,7 @@ Live metrics (run `python -m eval.detection_quality`) on the synthetic labeled s
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q                  # 55 tests: pipeline, cage, enrich, respond, triage, API, ML, SQL hunts, real-log ingest
+python -m pytest -q                  # 62 tests: pipeline, cage, enrich, respond, triage, API, ML, SQL hunts, real-log ingest, ECS/Sigma
 python -m eval.detection_quality     # the scoreboard gate (exit 0 = all targets met)
 ```
 
