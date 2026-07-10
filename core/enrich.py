@@ -11,6 +11,8 @@ Returns a stable shape so downstream (triage, impossible-travel) can rely on it:
 """
 from __future__ import annotations
 
+import copy
+import functools
 import ipaddress
 import os
 
@@ -30,6 +32,26 @@ _MOCK: dict[str, dict] = {
                       "reputation": {"category": "tor-exit", "is_known_bad": True}},
     "91.203.5.10":   {"geo": {"city": "Sydney", "country": "AU", "lat": -33.8688, "lon": 151.2093},
                       "reputation": {"category": "hosting", "is_known_bad": True}},
+    "62.4.5.6":      {"geo": {"city": "Amsterdam", "country": "NL", "lat": 52.3676, "lon": 4.9041},
+                      "reputation": {"category": "bulletproof-hosting", "is_known_bad": True}},
+    "198.51.100.99": {"geo": {"city": "Mumbai", "country": "IN", "lat": 19.0760, "lon": 72.8777},
+                      "reputation": {"category": "residential", "is_known_bad": False}},
+    "103.21.58.10":  {"geo": {"city": "Mumbai", "country": "IN", "lat": 19.0760, "lon": 72.8777},
+                      "reputation": {"category": "residential", "is_known_bad": False}},
+    "103.21.244.20": {"geo": {"city": "Pune", "country": "IN", "lat": 18.5204, "lon": 73.8567},
+                      "reputation": {"category": "residential", "is_known_bad": False}},
+    "62.4.5.9":      {"geo": {"city": "Amsterdam", "country": "NL", "lat": 52.3676, "lon": 4.9041},
+                      "reputation": {"category": "bulletproof-hosting", "is_known_bad": True}},
+    "141.98.10.60":  {"geo": {"city": "Vilnius", "country": "LT", "lat": 54.6872, "lon": 25.2797},
+                      "reputation": {"category": "credential-stuffing", "is_known_bad": True}},
+    "89.248.165.74": {"geo": {"city": "Amsterdam", "country": "NL", "lat": 52.3676, "lon": 4.9041},
+                      "reputation": {"category": "scanner", "is_known_bad": True}},
+    "45.155.205.86": {"geo": {"city": "Moscow", "country": "RU", "lat": 55.7558, "lon": 37.6173},
+                      "reputation": {"category": "hosting", "is_known_bad": True}},
+    "179.43.150.20": {"geo": {"city": "Zurich", "country": "CH", "lat": 47.3769, "lon": 8.5417},
+                      "reputation": {"category": "bulletproof-hosting", "is_known_bad": True}},
+    "198.51.100.50": {"geo": {"city": "Mumbai", "country": "IN", "lat": 19.0760, "lon": 72.8777},
+                      "reputation": {"category": "datacenter", "is_known_bad": False}},
 }
 
 
@@ -71,9 +93,12 @@ def _live_lookup(ip: str) -> dict | None:
         return None
 
 
-def enrich_ip(ip: str | None) -> dict:
-    """Enrich a single IP. Always returns the stable shape; `enriched` says if we
-    found real context (geo or a non-neutral reputation)."""
+@functools.lru_cache(maxsize=4096)
+def _enrich_ip_cached(ip: str | None) -> dict:
+    """Cached enrichment (see enrich_ip). Reputation is stable within a run, so
+    caching avoids repeated work — and, when live enrichment is on, repeated HTTP
+    calls in the impossible-travel loop. Callers must NOT mutate the return value;
+    enrich_ip() hands out independent deep copies for that reason."""
     if not ip:
         return {"ip": ip, "enriched": False, "geo": None,
                 "reputation": {"category": "unknown", "is_known_bad": False, "source": "none"}}
@@ -97,3 +122,10 @@ def enrich_ip(ip: str | None) -> dict:
     # Unknown public IP: still a valid (neutral) result, but not "enriched".
     return {"ip": ip, "enriched": False, "geo": None,
             "reputation": {"category": "unknown", "is_known_bad": False, "source": "mock"}}
+
+
+def enrich_ip(ip: str | None) -> dict:
+    """Enrich a single IP. Always returns the stable shape; `enriched` says if we
+    found real context (geo or a non-neutral reputation). Result is a deep copy of
+    the cached value, so mutating it can never corrupt the cache or the intel table."""
+    return copy.deepcopy(_enrich_ip_cached(ip))

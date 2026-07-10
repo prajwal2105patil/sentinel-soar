@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import functools
 import json
+from contextlib import asynccontextmanager
 
 import yaml
 from fastapi import Depends, FastAPI, HTTPException
@@ -20,10 +21,20 @@ from pydantic import BaseModel, Field
 from agent import investigator
 from core import cage as cage_mod
 from core import db
-from core.auth import require_api_key
+from core.auth import expected_key, require_api_key
 from core.ingest import _parse_line
 
-app = FastAPI(title="Sentinel-SOAR", version="0.3.0",
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Validate the auth config once at startup. In prod with no SENTINEL_API_KEY
+    # this raises, so a misconfigured deploy fails fast instead of booting healthy
+    # and 500-ing (or dev-key-leaking) on every request.
+    expected_key()
+    yield
+
+
+app = FastAPI(title="Sentinel-SOAR", version="0.3.0", lifespan=_lifespan,
               description="AiStrike-mirroring mini SOAR — detect, triage, investigate, respond.")
 
 RULES_DIR = db.ROOT / "detections" / "rules"

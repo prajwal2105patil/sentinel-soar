@@ -20,3 +20,5 @@ match:
 group_by: username
 params:
   max_kmh: 900               # implied speed above this = physically impossible
+  min_distance_km: 50        # below this the endpoints are co-located, not travel
+                             # (guards the same-timestamp dt=0 -> infinite-speed case)

@@ -24,10 +24,24 @@ from core.cage import Cage
 RULES_DIR = db.ROOT / "detections" / "rules"
 LABELS_PATH = db.DATA_DIR / "labels.csv"
 
+# Rules are trusted YAML, but column names still never reach SQL unvetted:
+# every `match:` key must be on this whitelist or the rule is rejected outright.
+_ALLOWED_COLS = frozenset({"username", "source_ip", "host", "event_type", "source"})
+
 
 # ------------------------------------------------------------------ helpers
 def _load_rules() -> list[dict]:
     return [yaml.safe_load(p.read_text(encoding="utf-8")) for p in sorted(RULES_DIR.glob("*.yml"))]
+
+
+def _where(match: dict) -> str:
+    """Build a WHERE clause from a rule's `match:` block. Values are always bound
+    parameters; column names are interpolated, so they are strictly whitelisted."""
+    bad = set(match) - _ALLOWED_COLS
+    if bad:
+        raise ValueError(f"rule match uses non-whitelisted column(s): {sorted(bad)}; "
+                         f"allowed: {sorted(_ALLOWED_COLS)}")
+    return " AND ".join(f"{k} = ?" for k in match)
 
 
 def _parse_ts(ts: str) -> float:
@@ -59,7 +73,7 @@ def _sliding_window_hit(rows: list, count: int, window_s: int) -> list:
 def _evaluate_threshold(conn, rule: dict) -> list[dict]:
     match = rule.get("match", {})
     group_field, thr = rule["group_by"], rule["threshold"]
-    where = " AND ".join(f"{k} = ?" for k in match)
+    where = _where(match)
     sql = f"SELECT * FROM events WHERE {where} ORDER BY ts" if where else \
           "SELECT * FROM events ORDER BY ts"
     matched = conn.execute(sql, tuple(match.values())).fetchall()
@@ -97,7 +111,11 @@ def _evaluate_impossible_travel(conn, rule: dict) -> list[dict]:
     from core import enrich
     match, group_field = rule.get("match", {}), rule["group_by"]
     max_kmh = rule["params"]["max_kmh"]
-    where = " AND ".join(f"{k} = ?" for k in match)
+    # Distance floor: below this the two IPs are effectively co-located (load
+    # balancer, dual-homed host, NAT egress) and it is NOT travel — regardless of
+    # elapsed time. Guards the dt==0 case, where implied speed would be infinite.
+    min_dist_km = rule["params"].get("min_distance_km", 50)
+    where = _where(match)
     rows = conn.execute(
         f"SELECT * FROM events WHERE {where} ORDER BY ts", tuple(match.values())).fetchall()
 
@@ -116,6 +134,8 @@ def _evaluate_impossible_travel(conn, rule: dict) -> list[dict]:
             if not g1 or not g2:
                 continue
             dist = _haversine_km(g1, g2)
+            if dist < min_dist_km:
+                continue  # co-located endpoints: not travel, never impossible
             dt_h = (_parse_ts(cur["ts"]) - _parse_ts(prev["ts"])) / 3600.0
             kmh = dist / dt_h if dt_h > 0 else float("inf")
             if kmh > max_kmh and (worst is None or kmh > worst["kmh"]):
@@ -168,10 +188,50 @@ def _evaluate_failed_then_success(conn, rule: dict) -> list[dict]:
     return alerts
 
 
+def _evaluate_cloud_anomaly(conn, rule: dict) -> list[dict]:
+    """Cloud telemetry rule: root console login / access-key creation, optionally
+    gated on known-bad source reputation. Second telemetry source end-to-end."""
+    from core import enrich
+    match = rule.get("match", {})
+    where = _where(match)
+    sql = (f"SELECT * FROM events WHERE source = 'cloudtrail' AND {where} ORDER BY ts"
+           if where else "SELECT * FROM events WHERE source = 'cloudtrail' ORDER BY ts")
+    rows = conn.execute(sql, tuple(match.values())).fetchall()
+
+    by_ip: dict[str, list] = {}
+    for r in rows:
+        by_ip.setdefault(r["source_ip"], []).append(r)
+
+    require_bad = rule.get("params", {}).get("require_known_bad_ip", False)
+    alerts = []
+    for ip, evs in by_ip.items():
+        rep = enrich.enrich_ip(ip)["reputation"]
+        if require_bad and not rep["is_known_bad"]:
+            continue
+        # follow-on persistence: access keys minted from the same source
+        keys = conn.execute(
+            "SELECT * FROM events WHERE source='cloudtrail' "
+            "AND event_type='cloud_create_access_key' AND source_ip=? ORDER BY ts",
+            (ip,)).fetchall()
+        all_evs = evs + [k for k in keys if k["id"] not in {e["id"] for e in evs}]
+        evidence = {
+            "event_ids": [e["id"] for e in all_evs], "cloud": True,
+            "root_logins": len(evs), "access_keys_created": len(keys),
+            "region": evs[0]["host"], "known_bad_ip": rep["is_known_bad"],
+            "reputation_category": rep["category"], "targeted_users": ["root"]}
+        alerts.append({
+            "rule_id": rule["id"], "title": rule["name"], "mitre": rule.get("mitre", []),
+            "severity": rule["severity"], "source_ip": ip, "username": "root",
+            "event_count": len(all_evs), "first_ts": all_evs[0]["ts"],
+            "last_ts": all_evs[-1]["ts"], "evidence": evidence})
+    return alerts
+
+
 _DISPATCH = {
     "threshold": _evaluate_threshold,
     "impossible_travel": _evaluate_impossible_travel,
     "failed_then_success": _evaluate_failed_then_success,
+    "cloud_anomaly": _evaluate_cloud_anomaly,
 }
 
 
@@ -190,14 +250,19 @@ def detect(verbose: bool = True) -> dict:
         if evaluator:
             candidates.extend(evaluator(conn, rule))
 
+    # Knowledge-graph correlation context, built once per run over the event store
+    # and shared by every investigation (composite-AI: the KG half).
+    from core.graph import EntityGraph
+    entity_graph = EntityGraph.from_db(conn)
+
     cases, latencies, auto = [], [], 0
     for raw in candidates:
         t0 = time.perf_counter()
         audit.log_action(conn, actor="detect", action="alert_raised", target=raw["source_ip"],
                          detail={"rule_id": raw["rule_id"], "count": raw["event_count"]})
 
-        case = investigator.investigate(raw, cage)  # agent: enrich -> map -> caged verdict -> response
-        auto += 1
+        case = investigator.investigate(raw, cage, graph=entity_graph)
+        auto += _is_auto_resolved(case)
         action = "verdict_escalated" if case["escalated"] else "verdict_suppressed"
         audit.log_action(conn, actor="triage-agent", action=action, target=raw["source_ip"],
                          detail={"verdict": case["verdict"], "rule_id": raw["rule_id"]})
@@ -225,15 +290,54 @@ def _load_labels() -> dict[str, str]:
         return {row["source_ip"]: row["label"] for row in csv.DictReader(f)}
 
 
+def _is_auto_resolved(case: dict) -> bool:
+    """True when the agent resolved the alert without waiting on a human:
+    either it auto-suppressed the alert, or it escalated with at least one
+    containment action it may execute autonomously (not approval-gated).
+    Fully human-gated escalations (e.g. critical compromise, where policy gates
+    every action) count as analyst-resolved, so this rate can drop below 100%."""
+    if not case["escalated"]:
+        return True
+    actions = case["response"]["actions"]
+    return any(not a["requires_approval"] for a in actions)
+
+
+def _verdict_supported(c: dict) -> bool:
+    """Does the cited evidence actually SUPPORT the verdict (not just exist)?
+
+    MALICIOUS must be backed by at least one hard signal: a success-after-failures
+    compromise, >= 5 failures in-window, an impossible-travel speed violation, a
+    known-bad source reputation, or a root cloud anomaly from a flagged IP.
+    SUSPICIOUS must cite at least one event. BENIGN suppressions assert no malice,
+    so existence of the cited review evidence suffices."""
+    ev = c.get("evidence") or {}
+    verdict = c.get("verdict")
+    known_bad = bool((c.get("enrichment") or {}).get("reputation", {}).get("is_known_bad"))
+    if verdict == "malicious":
+        return bool(
+            ev.get("success_after_failures")
+            or (c.get("event_count") or 0) >= 5
+            or ev.get("implied_kmh", 0) > ev.get("max_kmh", float("inf"))
+            or (ev.get("cloud") and ev.get("known_bad_ip"))
+            or known_bad
+        )
+    if verdict == "suspicious":
+        return bool(ev.get("event_ids"))
+    return bool(ev.get("event_ids"))  # benign: cited review evidence must exist
+
+
 def _faithfulness(conn, cases: list[dict]) -> float:
-    """Fraction of verdicts whose cited evidence event ids are all real events."""
+    """Fraction of verdicts that are evidence-faithful: every cited event id is a
+    real stored event AND the cited evidence substantively supports the verdict
+    (see _verdict_supported). A verdict citing phantom events, or a MALICIOUS
+    call with no hard signal behind it, scores 0 for that case."""
     real_ids = {r[0] for r in conn.execute("SELECT id FROM events").fetchall()}
     if not cases:
         return 100.0
     ok = 0
     for c in cases:
         ids = (c.get("evidence") or {}).get("event_ids", [])
-        if ids and all(i in real_ids for i in ids):
+        if ids and all(i in real_ids for i in ids) and _verdict_supported(c):
             ok += 1
     return ok / len(cases) * 100.0
 

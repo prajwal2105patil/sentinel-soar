@@ -3,5 +3,7 @@
   "T1110.001": { "name": "Brute Force: Password Guessing",   "tactic": "Credential Access" },
   "T1021.004": { "name": "Remote Services: SSH",             "tactic": "Lateral Movement" },
   "T1078":     { "name": "Valid Accounts",                   "tactic": "Initial Access, Persistence, Privilege Escalation, Defense Evasion" },
-  "T1078.003": { "name": "Valid Accounts: Local Accounts",   "tactic": "Initial Access, Persistence, Privilege Escalation, Defense Evasion" }
+  "T1078.003": { "name": "Valid Accounts: Local Accounts",   "tactic": "Initial Access, Persistence, Privilege Escalation, Defense Evasion" },
+  "T1078.004": { "name": "Valid Accounts: Cloud Accounts",   "tactic": "Initial Access, Persistence, Privilege Escalation, Defense Evasion" },
+  "T1098":     { "name": "Account Manipulation",             "tactic": "Persistence, Privilege Escalation" }
 }

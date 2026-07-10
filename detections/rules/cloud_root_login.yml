@@ -1,0 +1,16 @@
+id: RULE-CLOUD-ROOT-LOGIN-001
+name: Cloud Root Console Login from Known-Bad Source
+description: >
+  A successful cloud root/console login (or root access-key creation) from a source
+  IP with known-bad reputation. Root usage is high-risk; from a flagged IP it is a
+  strong compromise signal. Mirrors AiStrike's Cloud Security Automation pillar.
+severity: critical
+kind: cloud_anomaly
+source: cloudtrail
+mitre:
+  - T1078.004    # Valid Accounts: Cloud Accounts
+  - T1098        # Account Manipulation
+match:
+  event_type: cloud_root_login
+params:
+  require_known_bad_ip: true

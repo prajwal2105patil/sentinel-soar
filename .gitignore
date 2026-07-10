@@ -4,3 +4,8 @@ data/events.db
 .venv/
 venv/
 .env
+
+# local scratch / working notes — not part of the published repo
+.staging/
+.sync_probe.txt
+HANDOFF_CONTINUATION.md

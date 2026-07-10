@@ -1,0 +1,16 @@
+id: PB-CLOUD-ROOT-LOGIN-001
+rule_id: RULE-CLOUD-ROOT-LOGIN-001
+name: Cloud Root Compromise Response
+description: Containment for suspected cloud root-account compromise.
+actions:
+  - action: revoke_root_sessions
+    description: Revoke active root console/API sessions.
+    requires_approval: false
+  - action: disable_access_keys
+    description: Disable access keys created during the incident window.
+    requires_approval: true
+  - action: notify_cloud_admin
+    description: Page the cloud security admin out-of-band.
+    requires_approval: false
+approval_policy:
+  require_approval_if_severity: [critical]

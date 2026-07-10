@@ -1,0 +1,5 @@
+{"eventTime": "2025-06-14T10:01:00Z", "eventName": "ConsoleLogin", "userIdentity": {"userName": "deploy-svc"}, "sourceIPAddress": "198.51.100.23", "awsRegion": "ap-south-1", "responseElements": {"ConsoleLogin": "Success"}, "errorCode": null}
+{"eventTime": "2025-06-14T10:05:00Z", "eventName": "ConsoleLogin", "userIdentity": {"userName": "root"}, "sourceIPAddress": "185.220.101.5", "awsRegion": "us-east-1", "responseElements": {"ConsoleLogin": "Success"}, "errorCode": null}
+{"eventTime": "2025-06-14T10:06:30Z", "eventName": "CreateAccessKey", "userIdentity": {"userName": "root"}, "sourceIPAddress": "185.220.101.5", "awsRegion": "us-east-1", "errorCode": null}
+{"eventTime": "2025-06-14T10:09:00Z", "eventName": "ConsoleLogin", "userIdentity": {"userName": "analyst"}, "sourceIPAddress": "103.21.58.10", "awsRegion": "ap-south-1", "responseElements": {"ConsoleLogin": "Success"}, "errorCode": null}
+{"eventTime": "2025-06-14T10:12:00Z", "eventName": "ConsoleLogin", "userIdentity": {"userName": "billing"}, "sourceIPAddress": "45.133.1.88", "awsRegion": "eu-west-1", "responseElements": {"ConsoleLogin": "Failure"}, "errorCode": "FailedAuthentication"}

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS events (
     username    TEXT,
     source_ip   TEXT,
     host        TEXT,
+    source      TEXT NOT NULL DEFAULT 'auth',   -- telemetry source: auth | cloudtrail
     raw         TEXT NOT NULL
 );
 

@@ -59,3 +59,13 @@ def test_ingest_and_cases(client):
     r = client.get("/cases", headers=KEY)
     assert r.status_code == 200
     assert r.json()["count"] >= 1
+
+
+def test_prod_without_key_fails_at_startup(monkeypatch):
+    # #3: misconfigured prod (no SENTINEL_API_KEY) must fail fast at startup
+    # (lifespan raises) rather than boot healthy and error per request.
+    monkeypatch.setenv("SENTINEL_ENV", "prod")
+    monkeypatch.delenv("SENTINEL_API_KEY", raising=False)
+    with pytest.raises(RuntimeError):
+        with TestClient(app):  # entering the context triggers the lifespan startup
+            pass

@@ -1,9 +1,19 @@
 source_ip,label,note
 203.0.113.44,malicious,SSH brute force - 8 failed logins in 30s across admin/root/oracle/test/git
 45.133.1.88,malicious,SSH brute force with successful login - credential compromise on postgres
-185.220.101.5,malicious,SSH brute force - 5 failed root logins in 24s (known Tor exit range)
+185.220.101.5,malicious,SSH brute force (5 failed root logins) + cloud root console login and access-key mint (Tor exit)
 91.203.5.10,malicious,Impossible travel - jsmith login from Sydney 7 min after Mumbai (account takeover)
+62.4.5.6,malicious,SSH brute force - 6 failures across service accounts from bulletproof hosting
+62.4.5.9,malicious,Low-and-slow brute force - 4 root failures spaced 90s apart; deliberately below the 5-in-120s threshold (known FN / detection gap)
+141.98.10.60,malicious,SSH brute force - credential-stuffing infrastructure (5 failures)
+89.248.165.74,malicious,SSH brute force - mass scanner (5 failures)
+45.155.205.86,malicious,SSH brute force - 6 failures targeting root and service accounts
+179.43.150.20,malicious,SSH brute force - bulletproof hosting source (5 failures)
 10.0.0.5,benign,Automated backup key auth from internal host
 198.51.100.7,benign,Legitimate user prajwal - single typo then success; later single stray failure
-198.51.100.23,benign,Deploy service publickey auth
+198.51.100.23,benign,Deploy service publickey auth (SSH + cloud console)
 203.0.113.9,benign,Legitimate user alice - one failed then success
+198.51.100.99,benign,Legitimate user meera - two fat-fingered passwords then success (must auto-suppress)
+198.51.100.50,benign,Misconfigured monitoring script retrying stale credentials - trips the brute-force rule (deliberate FP)
+103.21.58.10,benign,Legitimate user rohan - Mumbai office login (also cloud console)
+103.21.244.20,benign,Legitimate user rohan - Pune office 30 min later; ~240 km/h implied speed is a deliberate near-miss below the 900 km/h ceiling

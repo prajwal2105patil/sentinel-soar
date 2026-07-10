@@ -1,9 +1,11 @@
 """Unit tests for the individual components: enrich, cage, respond, triage."""
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
-from core import db, enrich, respond, triage
+from core import auth, db, detect, enrich, respond, triage
 from core.cage import Cage, validate_alert
 
 
@@ -104,3 +106,75 @@ def test_triage_review_escalates_when_known_bad():
     enr = {"reputation": {"category": "bulletproof-hosting", "is_known_bad": True}}
     v = triage.triage(alert, ev, enr)
     assert v["verdict"] == "suspicious"
+
+
+# ------------------------------------------------------------------ enrich caching (#7)
+def test_enrich_is_cached_and_returns_independent_copies():
+    enrich._enrich_ip_cached.cache_clear()
+    a = enrich.enrich_ip("45.133.1.88")
+    b = enrich.enrich_ip("45.133.1.88")
+    assert a == b and a is not b                          # deep copies: equal, distinct
+    assert enrich._enrich_ip_cached.cache_info().hits >= 1  # second call hit the cache
+    # mutating a returned copy must not corrupt the cache or the intel table
+    a["reputation"]["is_known_bad"] = False
+    assert enrich.enrich_ip("45.133.1.88")["reputation"]["is_known_bad"] is True
+
+
+# ------------------------------------------------------------------ auth config (#3)
+def test_expected_key_dev_default(monkeypatch):
+    monkeypatch.delenv("SENTINEL_API_KEY", raising=False)
+    monkeypatch.delenv("SENTINEL_ENV", raising=False)
+    assert auth.expected_key() == auth.DEV_API_KEY
+
+
+def test_expected_key_prod_requires_key(monkeypatch):
+    monkeypatch.setenv("SENTINEL_ENV", "prod")
+    monkeypatch.delenv("SENTINEL_API_KEY", raising=False)
+    with pytest.raises(RuntimeError):
+        auth.expected_key()
+
+
+def test_expected_key_prod_with_key(monkeypatch):
+    monkeypatch.setenv("SENTINEL_ENV", "prod")
+    monkeypatch.setenv("SENTINEL_API_KEY", "real-key")
+    assert auth.expected_key() == "real-key"
+
+
+# ------------------------------------------------------------------ impossible-travel dt=0 (#1)
+_IT_RULE = {
+    "id": "R-IT", "name": "Impossible Travel", "severity": "high",
+    "kind": "impossible_travel", "match": {"event_type": "auth_success"},
+    "group_by": "username", "params": {"max_kmh": 900, "min_distance_km": 50}, "mitre": [],
+}
+
+
+def _mem_conn() -> sqlite3.Connection:
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.executescript(db.SCHEMA)
+    return c
+
+
+def _add_success(c, ts, user, ip):
+    c.execute("INSERT INTO events (ts, event_type, username, source_ip, host, raw) "
+              "VALUES (?, 'auth_success', ?, ?, 'h', 'raw')", (ts, user, ip))
+
+
+def test_impossible_travel_same_timestamp_colocated_not_flagged():
+    # Regression: two same-second logins from co-located IPs (dt=0) must NOT be
+    # flagged — previously dt=0 forced implied speed to infinity -> false positive.
+    c = _mem_conn()
+    _add_success(c, "2025-06-14T08:00:00+00:00", "bob", "198.51.100.7")   # Mumbai
+    _add_success(c, "2025-06-14T08:00:00+00:00", "bob", "198.51.100.23")  # Mumbai (same geo)
+    c.commit()
+    assert detect._evaluate_impossible_travel(c, _IT_RULE) == []
+
+
+def test_impossible_travel_same_timestamp_faraway_is_flagged():
+    # Genuinely impossible: same second, Mumbai vs Amsterdam -> still caught.
+    c = _mem_conn()
+    _add_success(c, "2025-06-14T08:00:00+00:00", "bob", "198.51.100.7")   # Mumbai
+    _add_success(c, "2025-06-14T08:00:00+00:00", "bob", "45.133.1.88")    # Amsterdam
+    c.commit()
+    out = detect._evaluate_impossible_travel(c, _IT_RULE)
+    assert len(out) == 1 and out[0]["source_ip"] == "45.133.1.88"
