@@ -144,11 +144,12 @@ def ingest(log_path: Path = LOG_PATH, cloud_path: Path = CLOUD_PATH) -> int:
     conn = db.connect()
     audit.log_action(conn, actor="ingest", action="ingest_start",
                      target=str(log_path),
-                     detail={"sources": [log_path.name, cloud_path.name]})
+                     detail={"sources": [log_path.name] +
+                             ([cloud_path.name] if cloud_path else [])})
 
     conn.execute("DELETE FROM events")  # idempotent reload
     auth_events, auth_skipped = _load_auth(log_path)
-    cloud_events, cloud_skipped = _load_cloud(cloud_path)
+    cloud_events, cloud_skipped = _load_cloud(cloud_path) if cloud_path else ([], 0)
     events = auth_events + cloud_events
     skipped = auth_skipped + cloud_skipped
 
@@ -177,5 +178,15 @@ def ingest(log_path: Path = LOG_PATH, cloud_path: Path = CLOUD_PATH) -> int:
 
 
 if __name__ == "__main__":
-    ingest()
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Ingest telemetry into the event store.")
+    ap.add_argument("--log", type=Path, default=LOG_PATH,
+                    help="auth/syslog file. Real sshd logs work as-is "
+                         "(e.g. loghub OpenSSH — see scripts/fetch_public_sample.py).")
+    ap.add_argument("--cloud", type=Path, default=CLOUD_PATH,
+                    help="CloudTrail-style JSONL file.")
+    ap.add_argument("--no-cloud", action="store_true", help="skip the cloud source.")
+    a = ap.parse_args()
+    ingest(a.log, None if a.no_cloud else a.cloud)
 

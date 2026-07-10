@@ -9,3 +9,6 @@ venv/
 .staging/
 .sync_probe.txt
 HANDOFF_CONTINUATION.md
+
+# real public datasets fetched on demand (scripts/fetch_public_sample.py)
+data/public/

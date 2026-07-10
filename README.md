@@ -52,6 +52,8 @@ python -m core.ingest              # logs -> data/events.db
 python -m core.detect              # rules -> agent (enrich/correlate/ML/cage/verdict/response) -> scoreboard
 python -m ml.train                 # train the ML risk scorer, print held-out metrics + coefficients
 python -m cli.hunt top-talkers     # SQL threat-hunt CLI (spray / brute / users / timeline / cases / audit)
+python scripts/fetch_public_sample.py && python -m core.ingest --log data/public/OpenSSH_2k.log --no-cloud
+                                   # run on REAL public logs (loghub OpenSSH) — see docs/REAL_DATA.md
 uvicorn api.app:app --reload       # API: /ingest /investigate /cases  (X-API-Key required)
 python -m eval.detection_quality   # full §5 scoreboard gate (exits non-zero if any target missed)
 ```
@@ -101,7 +103,7 @@ Live metrics (run `python -m eval.detection_quality`) on the synthetic labeled s
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q                  # 50 tests: pipeline, cage, enrich, respond, triage, API, ML, SQL hunts
+python -m pytest -q                  # 55 tests: pipeline, cage, enrich, respond, triage, API, ML, SQL hunts, real-log ingest
 python -m eval.detection_quality     # the scoreboard gate (exit 0 = all targets met)
 ```
 
